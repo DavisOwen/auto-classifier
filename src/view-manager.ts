@@ -8,26 +8,26 @@ export class ViewManager {
         this.app = app;
     }
 
-    async getSelection(editor?: Editor): Promise<string | null> {
+    async getSelection(editor?: Editor): Promise<string[] | null> {
         if (editor) {
-            return editor.getSelection();
+            return [editor.getSelection()];
         }
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
-            return activeView.editor.getSelection();
+            return [activeView.editor.getSelection()];
         }
         return null;
     }
 
-    async getTitle(): Promise<string | null> {
+    async getTitle(): Promise<string[] | null> {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
-            return activeView.file.basename;
+            return [activeView.file.basename];
         }
         return null;
     }
 
-    async getFrontMatter(): Promise<string | null> {
+    async getFrontMatter(): Promise<string[] | null> {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             const file = activeView.file;
@@ -35,12 +35,12 @@ export class ViewManager {
             if (frontmatter?.position) {
                 delete frontmatter.position;
             }
-            return JSON.stringify(frontmatter);
+            return [JSON.stringify(frontmatter)];
         }
         return null;
     }
 
-    async getContent(): Promise<string | null> {
+    async getContent(): Promise<string[] | null> {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             // delete frontmatter
@@ -50,10 +50,24 @@ export class ViewManager {
             if (frontmatter) {
                 content = content.split('---').slice(2).join('---');
             }
-            return content;
+            return [content];
         }
         return null;
     }
+
+	async getCalloutContent(): Promise<string[] | null> {
+		const content = await this.getContent();
+		let contentList = [];
+		if (content && content[0]) {
+			const regex = /> \[!\w+\] #new-highlight\n>([^]+?)(?=\n>\n|\n*$)/g;
+			let match;
+			while ((match = regex.exec(content[0])) !== null) {
+			  contentList.push(match[1].trim());
+			}
+			return contentList;
+		}
+		return null;
+	}
 
     async getTags(filterRegex?: string): Promise<string[] | null> {
         //@ts-ignore
@@ -109,9 +123,8 @@ export class ViewManager {
         await this.app.fileManager.renameFile(file, newPath);
     }
 
-    async insertAtCursor(value: string, overwrite = false, outType: OutType, prefix = '', suffix = ''): Promise<void> {
+    async insertAtCursor(value: string, overwrite = false): Promise<void> {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const output = this.preprocessOutput(value, outType, prefix, suffix);
         
         if (activeView) {
             const editor = activeView.editor;
@@ -121,13 +134,12 @@ export class ViewManager {
                 editor.setSelection(editor.getCursor('to'));
             }
             // overwrite
-            editor.replaceSelection(output);
+            editor.replaceSelection(value);
         }
     }
 
-    async insertAtContentTop(value: string, outType: OutType, prefix = '', suffix = ''): Promise<void> {
+    async insertAtContentTop(value: string): Promise<void> {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const output = this.preprocessOutput(value, outType, prefix, suffix);
         
         if (activeView) {
             const editor = activeView.editor;
@@ -142,8 +154,35 @@ export class ViewManager {
 
             // replace top of the content
             editor.setCursor({line: topLine, ch: 0});
-            editor.replaceSelection(`${output}\n`);
+            editor.replaceSelection(`${value}\n`);
         }
+    }
+
+    async insertAtCalloutTop(callout: string, tags: string): Promise<void> {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+		if (!activeView) return;
+
+		const editor = activeView.editor;
+		const fileContent = editor.getValue();  // Get the current content of the file
+        
+		// Regular expression to find the specific callout with #new-highlight and the specified callout content     
+		const regex = new RegExp(`(> \\[!NOTE\\] #new-highlight)([\\s\\S]*?${callout}[\\s\\S]*?)(?=\n>\n|\n*$)`, 'g');
+		const match = regex.exec(fileContent);
+
+		if (match) {
+			const matchStartIndex = match.index;
+
+			// Calculate the insertion index (after #new-highlight)
+			const insertionIndex = matchStartIndex + match[1].length;
+
+			// Convert the insertion index to editor line/character position
+			const position = editor.offsetToPos(insertionIndex);
+
+			// Move the cursor to that position and insert the tags
+			editor.setCursor(position);
+			editor.replaceSelection(` (${tags})`);
+		}
     }
 
     preprocessOutput(value: string, outType: OutType, prefix = '', suffix = ''): string {
@@ -151,9 +190,9 @@ export class ViewManager {
         if (outType == OutType.Tag) {
             output = `${prefix}${value}${suffix}`;
             output = output.replace(/ /g, "_");
-            output = ` #${output} `;
+            output = `#${output}`;
         }
-        else if (outType == OutType.Wikilink) output = `[[${prefix}${value}${suffix}]] `;
+        else if (outType == OutType.Wikilink) output = `[[${prefix}${value}${suffix}]]`;
         return output
     }
 }

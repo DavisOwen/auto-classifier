@@ -7,7 +7,8 @@ enum InputType {
 	SelectedArea,
 	Title,
 	FrontMatter,
-	Content
+	Content,
+	CalloutContent,
 }
 
 export default class AutoClassifierPlugin extends Plugin {
@@ -44,6 +45,13 @@ export default class AutoClassifierPlugin extends Plugin {
 			name: 'Classify tag from Note Content',
 			callback: async () => {
 				await this.runClassifyTag(InputType.Content);
+			}
+		});
+		this.addCommand({
+			id: 'classify-tag-callout-content',
+			name: 'Classify tag from Callouts in Note Content',
+			callback: async () => {
+				await this.runClassifyTag(InputType.CalloutContent);
 			}
 		});
 
@@ -87,80 +95,97 @@ export default class AutoClassifierPlugin extends Plugin {
 		}
 
 		// Set Input 
-		let input: string | null = '';
+		let inputs: string[] | null = [''];
 		if (inputType == InputType.SelectedArea) {
-			input = await this.viewManager.getSelection();
+			inputs = await this.viewManager.getSelection();
 		}
 		else if (inputType == InputType.Title) {
-			input = await this.viewManager.getTitle();
+			inputs = await this.viewManager.getTitle();
 		}
 		else if (inputType == InputType.FrontMatter) {
-			input = await this.viewManager.getFrontMatter();
+			inputs = await this.viewManager.getFrontMatter();
 		}
 		else if (inputType == InputType.Content) {
-			input = await this.viewManager.getContent();
+			inputs = await this.viewManager.getContent();
+		}
+		else if (inputType == InputType.CalloutContent) {
+			inputs = await this.viewManager.getCalloutContent();
 		}
 
 		// input error
-		if (!input) {
+		if (!inputs) {
 			new Notice(`⛔ ${this.manifest.name}: no input data`);
 			return null;
 		}
 
-		// Replace {{input}}, {{reference}}
-		let user_prompt = commandOption.prmpt_template;
-		user_prompt = user_prompt.replace('{{input}}', input);
-		user_prompt = user_prompt.replace('{{reference}}', refs.join(','));
-		user_prompt = user_prompt.replace('{{max_tags}}', commandOption.max_tags === 0 ? 'unlimited' : commandOption.max_tags.toString());
-
-		const system_role = commandOption.chat_role;
-
-		// ------- [API Processing] -------
-		// Call API
-		const responseRaw = await ChatGPT.callAPI(
-			system_role, 
-			user_prompt, 
-			this.settings.apiKey,
-			this.settings.commandOption.model,
-			this.settings.commandOption.max_tokens,
-		);
-		let jsonList;
-		try {
-			jsonList = JSON.parse(responseRaw);
-			if (!Array.isArray(jsonList)) {
-				throw new Error();
+		for (let input of inputs) {
+			// input error
+			if (!input) {
+				new Notice(`⛔ ${this.manifest.name}: no input data`);
+				return null;
 			}
-		} catch (error) {
-			new Notice(`⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`);
-			return null;
-		}
-		jsonList.forEach(response => {
-			// Avoid low reliability
-			if (response.reliability <= 0.2) {
-				new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
-				return;
+
+			// Replace {{input}}, {{reference}}
+			let user_prompt = commandOption.prmpt_template;
+			user_prompt = user_prompt.replace('{{input}}', input);
+			user_prompt = user_prompt.replace('{{reference}}', refs.join(','));
+			user_prompt = user_prompt.replace('{{max_tags}}', commandOption.max_tags === 0 ? 'unlimited' : commandOption.max_tags.toString());
+
+			const system_role = commandOption.chat_role;
+
+			// ------- [API Processing] -------
+			// Call API
+			const responseRaw = await ChatGPT.callAPI(
+				system_role, 
+				user_prompt, 
+				this.settings.apiKey,
+				this.settings.commandOption.model,
+				this.settings.commandOption.max_tokens,
+			);
+			let jsonList;
+			try {
+				jsonList = JSON.parse(responseRaw);
+				if (!Array.isArray(jsonList)) {
+					throw new Error();
+				}
+			} catch (error) {
+				new Notice(`⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`);
+				return null;
 			}
+			let tagString = '';
+			jsonList.forEach(response => {
+				// Avoid low reliability
+				if (response.reliability <= 0.2) {
+					new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
+					return;
+				}
+				const output = this.viewManager.preprocessOutput(response.output, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+				tagString += output + ' '
+			})
 
 			// ------- [Add Tag] -------
 			// Output Type 1. [Tag Case] + Output Type 2. [Wikilink Case]
 			if (commandOption.outType == OutType.Tag || commandOption.outType == OutType.Wikilink) {
 				if (commandOption.outLocation == OutLocation.Cursor) {
-					this.viewManager.insertAtCursor(response.output, commandOption.overwrite, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+					this.viewManager.insertAtCursor(tagString, commandOption.overwrite);
 				} 
 				else if (commandOption.outLocation == OutLocation.ContentTop) {
-					this.viewManager.insertAtContentTop(response.output, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+					this.viewManager.insertAtContentTop(tagString);
+				}
+				else if (commandOption.outLocation == OutLocation.CalloutTop) {
+					this.viewManager.insertAtCalloutTop(input, tagString);
 				}
 			}
 			// Output Type 3. [Frontmatter Case]
 			else if (commandOption.outType == OutType.FrontMatter) {
-				this.viewManager.insertAtFrontMatter(commandOption.key, response.output, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				this.viewManager.insertAtFrontMatter(commandOption.key, tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
 			// Output Type 4. [Title]
 			else if (commandOption.outType == OutType.Title) {
-				this.viewManager.insertAtTitle(response.output + ' ', commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				this.viewManager.insertAtTitle(tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
-			new Notice(`✅ ${this.manifest.name}: classified to ${response.output}`);
-		})
+			new Notice(`✅ ${this.manifest.name}: classified to ${tagString}`);
+		}
 	}
 
 	// create loading spin in the Notice message

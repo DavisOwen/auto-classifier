@@ -14,6 +14,7 @@ export enum OutLocation {
     // Title,
     // FrontMatter,
     ContentTop,
+	CalloutTop,
 }
 
 // export enum OutLocation_link {
