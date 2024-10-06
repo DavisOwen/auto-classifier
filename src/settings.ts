@@ -49,6 +49,7 @@ export interface CommandOption {
     prmpt_template: string;
     model: string;
     max_tokens: number;
+	max_tags: number;
 }
 
 
@@ -80,6 +81,7 @@ export const DEFAULT_SETTINGS: AutoClassifierSettings = {
         prmpt_template: DEFAULT_PROMPT_TEMPLATE,
         model: "gpt-3.5-turbo",
         max_tokens: 150,
+		max_tags: 0,
     },
 };
 
@@ -257,7 +259,28 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
                             new Notice(`${tags.join('\n')}`);
                         });
                 });
-        }
+
+				// Add a setting to enter an integer for the maximum number of tags
+			new Setting(containerEl)
+				.setClass('setting-item-child')
+				.setName('Maximum Tags')
+				.setDesc('Enter the maximum number of tags to display, or set to 0 for unlimited.')
+				.addText((text) => {
+					text.setPlaceholder('Enter a number or 0 for unlimited')
+						.setValue(commandOption.max_tags?.toString() ?? '0')
+						.onChange(async (value) => {
+							const numValue = parseInt(value, 10);
+							
+							// Validate and update the maxTags setting (allow 0 for no limit)
+							if (!isNaN(numValue) && numValue >= 0) {
+								commandOption.max_tags = numValue;
+								new Notice(`Maximum tags set to ${numValue === 0 ? 'unlimited' : numValue}`);
+							} else {
+								new Notice('Please enter a valid positive integer.');
+							}
+						});
+				});
+		}
         
 
 

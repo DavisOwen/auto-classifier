@@ -153,7 +153,7 @@ export class ViewManager {
             output = output.replace(/ /g, "_");
             output = ` #${output} `;
         }
-        else if (outType == OutType.Wikilink) output = `[[${prefix}${value}${suffix}]]`;
+        else if (outType == OutType.Wikilink) output = `[[${prefix}${value}${suffix}]] `;
         return output
     }
 }

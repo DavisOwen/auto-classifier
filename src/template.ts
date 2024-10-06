@@ -4,8 +4,7 @@ export const DEFAULT_PROMPT_TEMPLATE = `Classify this content:
 {{input}}
 """
 Answer format is JSON Array [{reliability:0~1, output:selected_category}, ...]. 
-Even if you are not sure, qualify the reliability and select one. 
-Output must be one of these:
+Output {{max_tags}} tags, selected from the following list:
 
 {{reference}}
 `;

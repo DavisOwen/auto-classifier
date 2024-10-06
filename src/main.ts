@@ -75,13 +75,13 @@ export default class AutoClassifierPlugin extends Plugin {
 		const commandOption = this.settings.commandOption;
 		// ------- [API Key check] -------
 		if (!this.settings.apiKey) {
-			new Notice(`⛔ ${this.manifest.name}: You shuld input your API Key`);
+			new Notice(`⛔ ${this.manifest.name}: You should input your API Key`);
 			return null
 		}
 		// ------- [Input] -------
-		const refs = this.settings.commandOption.refs;
+		const refs = commandOption.refs;
 		// reference check
-		if (this.settings.commandOption.useRef && (!refs || refs.length == 0)) {
+		if (commandOption.useRef && (!refs || refs.length == 0)) {
 			new Notice(`⛔ ${this.manifest.name}: no reference tags`);
 			return null
 		}
@@ -108,11 +108,12 @@ export default class AutoClassifierPlugin extends Plugin {
 		}
 
 		// Replace {{input}}, {{reference}}
-		let user_prompt = this.settings.commandOption.prmpt_template;
+		let user_prompt = commandOption.prmpt_template;
 		user_prompt = user_prompt.replace('{{input}}', input);
 		user_prompt = user_prompt.replace('{{reference}}', refs.join(','));
+		user_prompt = user_prompt.replace('{{max_tags}}', commandOption.max_tags === 0 ? 'unlimited' : commandOption.max_tags.toString());
 
-		const system_role = this.settings.commandOption.prmpt_template;
+		const system_role = commandOption.chat_role;
 
 		// ------- [API Processing] -------
 		// Call API
@@ -134,21 +135,9 @@ export default class AutoClassifierPlugin extends Plugin {
 			return null;
 		}
 		jsonList.forEach(response => {
-			const jsonRegex = /reliability[\s\S]*?:\s*([\d.]+)[\s\S]*?output[\s\S]*?:\s*"([^"^}]+)/;
-			const match = response.match(jsonRegex);
-			let resOutput;
-			let resReliabity;
-			if (match && match.length > 1) {
-				resOutput = match[2];
-				resReliabity = parseFloat(match[1]);
-			} else {
-				new Notice(`⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`);
-				return;
-			}
-
 			// Avoid low reliability
-			if (resReliabity! <= 0.2) {
-				new Notice(`⛔ ${this.manifest.name}: response has low reliability (${resReliabity})`);
+			if (response.reliability <= 0.2) {
+				new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
 				return;
 			}
 
@@ -156,21 +145,21 @@ export default class AutoClassifierPlugin extends Plugin {
 			// Output Type 1. [Tag Case] + Output Type 2. [Wikilink Case]
 			if (commandOption.outType == OutType.Tag || commandOption.outType == OutType.Wikilink) {
 				if (commandOption.outLocation == OutLocation.Cursor) {
-					this.viewManager.insertAtCursor(resOutput!, commandOption.overwrite, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+					this.viewManager.insertAtCursor(response.output, commandOption.overwrite, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
 				} 
 				else if (commandOption.outLocation == OutLocation.ContentTop) {
-					this.viewManager.insertAtContentTop(resOutput!, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+					this.viewManager.insertAtContentTop(response.output, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
 				}
 			}
 			// Output Type 3. [Frontmatter Case]
 			else if (commandOption.outType == OutType.FrontMatter) {
-				this.viewManager.insertAtFrontMatter(commandOption.key, resOutput!, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				this.viewManager.insertAtFrontMatter(commandOption.key, response.output, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
 			// Output Type 4. [Title]
 			else if (commandOption.outType == OutType.Title) {
-				this.viewManager.insertAtTitle(resOutput!, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				this.viewManager.insertAtTitle(response.output + ' ', commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
-			new Notice(`✅ ${this.manifest.name}: classified to ${resOutput}`);
+			new Notice(`✅ ${this.manifest.name}: classified to ${response.output}`);
 		})
 	}
 
