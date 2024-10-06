@@ -317,6 +317,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
                 .addDropdown((cb) => {
                     cb.addOption(String(OutLocation.Cursor), 'Current Cursor')
                         .addOption(String(OutLocation.ContentTop), 'Top of Content')
+						.addOption(String(OutLocation.CalloutTop), 'Top of Callout')
                         .setValue(String(commandOption.outLocation))
                         .onChange(async (value) => {
                             commandOption.outLocation = parseInt(value);
@@ -335,6 +336,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
                 .addDropdown((cb) => {
                     cb.addOption(String(OutLocation.Cursor), 'Current Cursor')
                         .addOption(String(OutLocation.ContentTop), 'Top of Content')
+						.addOption(String(OutLocation.CalloutTop), 'Top of Callout')
                         .setValue(String(commandOption.outLocation))
                         .onChange(async (value) => {
                             commandOption.outLocation = parseInt(value);
