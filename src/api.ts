@@ -6,6 +6,7 @@ export class ChatGPT {
 		system_role: string,
 		user_prompt: string,
 		apiKey: string,
+		abortSignal: AbortSignal,
 		model: string = 'gpt-3.5-turbo',
 		max_tokens: number = 150,
 		temperature: number = 0,
@@ -39,6 +40,9 @@ export class ChatGPT {
 		});
 
 		for (let attempt = 0; attempt < retries; attempt++) {
+			if (abortSignal.aborted) {
+				throw new Error('Aborted');
+			}
 			try {
 				const response = await requestUrl({
 					url: this.baseUrl,

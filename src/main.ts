@@ -14,9 +14,11 @@ enum InputType {
 export default class AutoClassifierPlugin extends Plugin {
 	settings: AutoClassifierSettings;
 	viewManager = new ViewManager(this.app);
+	abortController: AbortController;
 
 	async onload() {
 		await this.loadSettings();
+		this.abortController = new AbortController();
 
 		// Commands
 		this.addCommand({
@@ -55,6 +57,14 @@ export default class AutoClassifierPlugin extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: 'abort-classification',
+			name: 'Abort classification',
+			callback: () => {
+				this.abortClassification();
+			}
+		});
+
 		this.addSettingTab(new AutoClassifierSettingTab(this.app, this));
 	}
 
@@ -66,12 +76,20 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	async onunload() {
+		this.abortController.abort();
+	}
+
+	abortClassification() {
+		new Notice(`⛔ ${this.manifest.name}: aborting...`);
+		this.abortController.abort();
+		this.abortController = new AbortController();
 	}
 
 	async runClassifyTag(inputType: InputType) {
-		const loadingNotice = this.createLoadingNotice(`${this.manifest.name}: Processing..`);
+		const loadingNotice = this.createLoadingNotice(`${this.manifest.name}: Processing..`, 0);
+		const signal = this.abortController.signal
 		try {
-			await this.classifyTag(inputType);
+			await this.classifyTag(inputType, signal);
 			loadingNotice.hide();
 		} catch (err) {
 			loadingNotice.hide();
@@ -79,7 +97,7 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	// Main Classification
-	async classifyTag(inputType: InputType) {
+	async classifyTag(inputType: InputType, signal: AbortSignal) {
 		const commandOption = this.settings.commandOption;
 		// ------- [API Key check] -------
 		if (!this.settings.apiKey) {
@@ -119,7 +137,6 @@ export default class AutoClassifierPlugin extends Plugin {
 		}
 
 		for (let input of inputs) {
-			console.log(input);
 			// input error
 			if (!input) {
 				new Notice(`⛔ ${this.manifest.name}: no input data`);
@@ -142,6 +159,7 @@ export default class AutoClassifierPlugin extends Plugin {
 					system_role, 
 					user_prompt, 
 					this.settings.apiKey,
+					signal,
 					this.settings.commandOption.model,
 					this.settings.commandOption.max_tokens,
 				);
