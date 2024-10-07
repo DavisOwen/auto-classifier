@@ -102,7 +102,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		// Check if the note already exists
 		if (!note) {
 			// Create a new file with the name `linkText.md`
-			await this.app.vault.create(`${noteTitle}.md`, `# ${noteTitle}\n\n`);
+			await this.app.vault.create(`Topics/GPT/${noteTitle}.md`, '');
 			console.log(`Created note: ${noteTitle}`);
 		}
 	}
