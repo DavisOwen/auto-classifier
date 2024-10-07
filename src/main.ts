@@ -97,7 +97,7 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	async createNoteIfNotExist(noteTitle: string) {
-		const note = this.app.vault.getAbstractFileByPath(`${noteTitle}.md`);
+		const note = this.app.vault.getAbstractFileByPath(`Topics/GPT/${noteTitle}.md`);
 
 		// Check if the note already exists
 		if (!note) {
@@ -203,7 +203,7 @@ export default class AutoClassifierPlugin extends Plugin {
 				// Avoid low reliability
 				if (response.reliability <= 0.2) {
 					new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
-					return;
+					continue;
 				}
 				const outputName = response.output + '-GPT';
 				const output = this.viewManager.preprocessOutput(outputName, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
