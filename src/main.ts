@@ -96,6 +96,16 @@ export default class AutoClassifierPlugin extends Plugin {
 		}
 	}
 
+	async createNoteIfNotExist(noteTitle: string) {
+		const note = this.app.vault.getAbstractFileByPath(`${noteTitle}.md`);
+
+		// Check if the note already exists
+		if (!note) {
+			// Create a new file with the name `linkText.md`
+			await this.app.vault.create(`${noteTitle}.md`, `# ${noteTitle}\n\n`);
+			console.log(`Created note: ${noteTitle}`);
+		}
+	}
 	// Main Classification
 	async classifyTag(inputType: InputType, signal: AbortSignal) {
 		const commandOption = this.settings.commandOption;
@@ -185,7 +195,7 @@ export default class AutoClassifierPlugin extends Plugin {
 				return null;
 			}
 			let tagString = ' #auto-classifier ';
-			jsonList.forEach(response => {
+			for (let response of jsonList) {
 				if (!response || !response.reliability || !response.output) {
 					new Notice(`⛔ ${this.manifest.name}: response format error`);
 					return;
@@ -195,9 +205,11 @@ export default class AutoClassifierPlugin extends Plugin {
 					new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
 					return;
 				}
-				const output = this.viewManager.preprocessOutput(response.output, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
-				tagString += output + '-GPT '
-			})
+				const outputName = response.output + '-GPT';
+				const output = this.viewManager.preprocessOutput(outputName, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
+				await this.createNoteIfNotExist(outputName);
+				tagString += output + ' '
+			}
 
 			// ------- [Add Tag] -------
 			// Output Type 1. [Tag Case] + Output Type 2. [Wikilink Case]
