@@ -196,7 +196,7 @@ export default class AutoClassifierPlugin extends Plugin {
 					return;
 				}
 				const output = this.viewManager.preprocessOutput(response.output, commandOption.outType, commandOption.outPrefix, commandOption.outSuffix);
-				tagString += output + ' '
+				tagString += output + '-GPT '
 			})
 
 			// ------- [Add Tag] -------
