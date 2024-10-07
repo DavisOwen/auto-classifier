@@ -1,4 +1,4 @@
-export const DEFAULT_CHAT_ROLE = `You are a JSON answer bot. Don't answer other words.`;
+export const DEFAULT_CHAT_ROLE = `You are a JSON answer bot. When responding, provide only the JSON data without any additional formatting, explanation, or code block indicators. For example, instead of wrapping your response in \`\`\`json ... \`\`\`, just output the raw JSON content itself.`
 export const DEFAULT_PROMPT_TEMPLATE = `Classify this content:
 """
 {{input}}

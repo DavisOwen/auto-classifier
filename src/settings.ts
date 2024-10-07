@@ -29,6 +29,14 @@ export enum OutType {
     Wikilink,
 }
 
+export const ApiModel = {
+	"gpt-3.5-turbo": "gpt-3.5-turbo",
+	"gpt-4": "gpt-4",
+	"gpt-4o": "gpt-4o",
+	"gpt-4o-mini": "gpt-4o-mini",
+	"gpt-4-turbo": "gpt-4-turbo",
+}
+
 // for tag, keyword
 export interface CommandOption {
     useRef: boolean;
@@ -166,6 +174,23 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
                     }
                 });
         });
+
+		// Select API model
+        new Setting(containerEl)
+            .setName('ChatGPT Model')
+            .setDesc('Choose your API model')
+            .addDropdown((cb) => {
+                cb.addOption(ApiModel['gpt-3.5-turbo'], ApiModel['gpt-3.5-turbo'])
+                    .addOption(ApiModel['gpt-4'], ApiModel['gpt-4'])
+                    .addOption(ApiModel['gpt-4o'], ApiModel['gpt-4o'])
+                    .addOption(ApiModel['gpt-4o-mini'], ApiModel['gpt-4o-mini'])
+                    .setValue(commandOption.model)
+                    .onChange(async (value) => {
+                        commandOption.model = value;
+                        await this.plugin.saveSettings();
+                        this.display();
+                    });
+            });
 
         // ------- [Tag Reference Setting] -------
         containerEl.createEl('h1', { text: 'Tag Reference Setting' });

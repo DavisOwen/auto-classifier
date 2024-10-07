@@ -12,7 +12,10 @@ export class ChatGPT {
 		top_p: number = 0.95,
 		frequency_penalty: number = 0,
 		presence_penalty: number = 0.5,
+		retries = 5,
 	): Promise<string> {
+
+		const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 		const headers = {
 			'Content-Type': 'application/json',
@@ -35,18 +38,27 @@ export class ChatGPT {
 			presence_penalty: presence_penalty
 		});
 
-		const response = await requestUrl({
-			url: this.baseUrl,
-			method: 'POST',
-			headers: headers,
-			body: body,
-		});
-
-		if (response.status >= 400) {
-			throw new Error(`API call error: ${response.status}`);
+		for (let attempt = 0; attempt < retries; attempt++) {
+			try {
+				const response = await requestUrl({
+					url: this.baseUrl,
+					method: 'POST',
+					headers: headers,
+					body: body,
+				});
+				const data = JSON.parse(response.text);
+				return data.choices[0].message.content;
+			} catch (error) {
+				console.error(error);
+				if (error.status === 429) {
+					const waitTime = Math.pow(2, attempt) * 2000;
+					console.log(`Retrying in ${waitTime}ms...`);
+					await delay(waitTime);
+				} else {
+					break;
+				}
+			}
 		}
-
-		const data = JSON.parse(response.text);
-		return data.choices[0].message.content;
+		throw new Error("Max retries reached. Unable to complete the request.");
 	}
 }

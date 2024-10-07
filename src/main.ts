@@ -119,6 +119,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		}
 
 		for (let input of inputs) {
+			console.log(input);
 			// input error
 			if (!input) {
 				new Notice(`⛔ ${this.manifest.name}: no input data`);
@@ -135,13 +136,23 @@ export default class AutoClassifierPlugin extends Plugin {
 
 			// ------- [API Processing] -------
 			// Call API
-			const responseRaw = await ChatGPT.callAPI(
-				system_role, 
-				user_prompt, 
-				this.settings.apiKey,
-				this.settings.commandOption.model,
-				this.settings.commandOption.max_tokens,
-			);
+			let responseRaw;
+			try {
+				responseRaw = await ChatGPT.callAPI(
+					system_role, 
+					user_prompt, 
+					this.settings.apiKey,
+					this.settings.commandOption.model,
+					this.settings.commandOption.max_tokens,
+				);
+				if (!responseRaw) {
+					new Notice(`⛔ ${this.manifest.name}: empty API response`);
+					return null;
+				}
+			} catch (error) {
+				new Notice(`⛔ ${this.manifest.name}: API error (output ${error})`);
+				return null;
+			}
 			let jsonList;
 			try {
 				jsonList = JSON.parse(responseRaw);
@@ -149,11 +160,18 @@ export default class AutoClassifierPlugin extends Plugin {
 					throw new Error();
 				}
 			} catch (error) {
-				new Notice(`⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`);
+				console.error(error);
+				const errorString = `⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`;
+				console.error(errorString);
+				new Notice(errorString);
 				return null;
 			}
-			let tagString = '';
+			let tagString = ' #auto-classifier ';
 			jsonList.forEach(response => {
+				if (!response || !response.reliability || !response.output) {
+					new Notice(`⛔ ${this.manifest.name}: response format error`);
+					return;
+				}
 				// Avoid low reliability
 				if (response.reliability <= 0.2) {
 					new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
@@ -167,22 +185,22 @@ export default class AutoClassifierPlugin extends Plugin {
 			// Output Type 1. [Tag Case] + Output Type 2. [Wikilink Case]
 			if (commandOption.outType == OutType.Tag || commandOption.outType == OutType.Wikilink) {
 				if (commandOption.outLocation == OutLocation.Cursor) {
-					this.viewManager.insertAtCursor(tagString, commandOption.overwrite);
+					await this.viewManager.insertAtCursor(tagString, commandOption.overwrite);
 				} 
 				else if (commandOption.outLocation == OutLocation.ContentTop) {
-					this.viewManager.insertAtContentTop(tagString);
+					await this.viewManager.insertAtContentTop(tagString);
 				}
 				else if (commandOption.outLocation == OutLocation.CalloutTop) {
-					this.viewManager.insertAtCalloutTop(input, tagString);
+					await this.viewManager.insertAtCalloutTop(input, tagString);
 				}
 			}
 			// Output Type 3. [Frontmatter Case]
 			else if (commandOption.outType == OutType.FrontMatter) {
-				this.viewManager.insertAtFrontMatter(commandOption.key, tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				await this.viewManager.insertAtFrontMatter(commandOption.key, tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
 			// Output Type 4. [Title]
 			else if (commandOption.outType == OutType.Title) {
-				this.viewManager.insertAtTitle(tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
+				await this.viewManager.insertAtTitle(tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
 			new Notice(`✅ ${this.manifest.name}: classified to ${tagString}`);
 		}

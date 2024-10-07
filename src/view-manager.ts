@@ -62,7 +62,7 @@ export class ViewManager {
 			const regex = /> \[!\w+\] #new-highlight\n>([^]+?)(?=\n>\n|\n*$)/g;
 			let match;
 			while ((match = regex.exec(content[0])) !== null) {
-			  contentList.push(match[1].trim());
+			  contentList.push(match[1]);
 			}
 			return contentList;
 		}
@@ -167,7 +167,8 @@ export class ViewManager {
 		const fileContent = editor.getValue();  // Get the current content of the file
         
 		// Regular expression to find the specific callout with #new-highlight and the specified callout content     
-		const regex = new RegExp(`(> \\[!NOTE\\] #new-highlight)([\\s\\S]*?${callout}[\\s\\S]*?)(?=\n>\n|\n*$)`, 'g');
+		const regex = new RegExp(`(> \\[!\\w+\\] #new-highlight)\\s*>\\s*(${callout.replace(/[-\/\\^$.*+?()[\]{}|]/g, '\\$&')})(?=\\s*>|\\s*$)`, 'g');
+
 		const match = regex.exec(fileContent);
 
 		if (match) {
@@ -181,7 +182,7 @@ export class ViewManager {
 
 			// Move the cursor to that position and insert the tags
 			editor.setCursor(position);
-			editor.replaceSelection(` (${tags})`);
+			editor.replaceSelection(`${tags}`);
 		}
     }
 
