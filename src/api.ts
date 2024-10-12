@@ -56,7 +56,7 @@ export class ChatGPT {
 				console.error(error);
 				if (error.status === 429) {
 					const waitTime = Math.pow(2, attempt) * 2000;
-					console.log(`Retrying in ${waitTime}ms...`);
+					console.debug(`Retrying in ${waitTime}ms...`);
 					await delay(waitTime);
 				} else {
 					break;

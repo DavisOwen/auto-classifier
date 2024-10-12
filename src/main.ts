@@ -99,18 +99,28 @@ export default class AutoClassifierPlugin extends Plugin {
 			await this.classifyTag(inputType, signal, wholeVault);
 			loadingNotice.hide();
 		} catch (err) {
+			console.error(err);
 			loadingNotice.hide();
 		}
 	}
 
 	async createNoteIfNotExist(noteTitle: string) {
-		const note = this.app.vault.getAbstractFileByPath(`Topics/GPT/${noteTitle}.md`);
+		try {
+			const note = this.app.vault.getAbstractFileByPath(`Topics/GPT/${noteTitle}.md`);
 
-		// Check if the note already exists
-		if (!note) {
-			// Create a new file with the name `linkText.md`
-			await this.app.vault.create(`Topics/GPT/${noteTitle}.md`, '');
-			console.log(`Created note: ${noteTitle}`);
+			// Check if the note already exists
+			if (!note) {
+				// Create a new file with the name `linkText.md`
+				await this.app.vault.create(`Topics/GPT/${noteTitle}.md`, '');
+				console.log(`Created note: ${noteTitle}`);
+			}
+		} catch (err) {
+			if (err.message.includes('File already exists')) {
+				// Do nothing if the file already exists
+				console.warn(`File already exists: ${noteTitle}.md`);
+			} else {
+				throw err;
+			}
 		}
 	}
 
@@ -128,11 +138,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		refs: string[],
 		signal: AbortSignal
 	) {
-		// open file in vault in new tab for processing - if wholeVault
-		// is false, we should just stay in the existing file
-		const leaf = this.app.workspace.getLeaf();
-		await leaf.openFile(file);
-
+		console.debug(`${this.manifest.name}: classifying file:${file.name}`)
 		// Set Input 
 		let inputs: string[] | null = [''];
 		if (inputType == InputType.SelectedArea) {
@@ -154,16 +160,16 @@ export default class AutoClassifierPlugin extends Plugin {
 		// input error
 		if (!inputs) {
 			if (!wholeVault) {
-				new Notice(`⛔ ${this.manifest.name}: no input data`);
+				console.warn(`$this.manifest.name}: no input data for file: ${file.name}`);
 			}
-			return;
+			return
 		}
 
 		for (let input of inputs) {
 			// input error
 			if (!input) {
-				new Notice(`⛔ ${this.manifest.name}: no input data`);
-				return;
+				console.warn(`Empty input data while processing ${file.name}`)
+				continue
 			}
 
 			// Replace {{input}}, {{reference}}
@@ -187,35 +193,33 @@ export default class AutoClassifierPlugin extends Plugin {
 					this.settings.commandOption.max_tokens,
 				);
 				if (!responseRaw) {
-					new Notice(`⛔ ${this.manifest.name}: empty API response`);
-					return null;
+					console.warn(`${this.manifest.name}: Empty API response for input:${input} in file:${file.name}`)
+					continue
 				}
 			} catch (error) {
-				new Notice(`⛔ ${this.manifest.name}: API error (output ${error})`);
-				return null;
+				console.warn(`${this.manifest.name}: API error processing input:${input} in file ${file.name}. (output: ${error})`)
+				continue
 			}
 			let jsonList;
 			try {
 				jsonList = JSON.parse(responseRaw);
 				if (!Array.isArray(jsonList)) {
-					throw new Error();
+					console.warn(`${this.manifest.name}: API response from input:${input} in file ${file.name} is not proper JSON`)
+					continue
 				}
 			} catch (error) {
-				console.error(error);
-				const errorString = `⛔ ${this.manifest.name}: output format error (output: ${responseRaw})`;
-				console.error(errorString);
-				new Notice(errorString);
-				return null;
+				console.warn(`${this.manifest.name}: Output format error for input:${input} in file ${file.name} (output: ${responseRaw}). Error: ${error}`);
+				continue
 			}
 			let tagString = ' #auto-classifier ';
 			for (let response of jsonList) {
 				if (!response || !response.reliability || !response.output) {
-					new Notice(`⛔ ${this.manifest.name}: response format error`);
-					return;
+					console.warn(`${this.manifest.name}: API response from input:${input} in file ${file.name} is not expected format`)
+					continue
 				}
 				// Avoid low reliability
 				if (response.reliability <= 0.2) {
-					new Notice(`⛔ ${this.manifest.name}: response has low reliability (${response.reliability})`);
+					console.warn(`${this.manifest.name}: Output: ${response.output} from input:${input} in file ${file.name} has low reliability: ${response.reliability}, skipping...`)
 					continue;
 				}
 				const outputName = response.output + '-GPT';
@@ -245,7 +249,7 @@ export default class AutoClassifierPlugin extends Plugin {
 			else if (commandOption.outType == OutType.Title) {
 				await this.viewManager.insertAtTitle(tagString, commandOption.overwrite, commandOption.outPrefix, commandOption.outSuffix);
 			}
-			new Notice(`✅ ${this.manifest.name}: classified to ${tagString}`);
+			console.debug(`${this.manifest.name}: Input: ${input} in file ${file.name} classified to ${tagString}`);
 		}
 	}
 
@@ -268,17 +272,17 @@ export default class AutoClassifierPlugin extends Plugin {
 		// All files in the vault, or just the current file
 		const files = wholeVault ? this.app.vault.getMarkdownFiles() : [this.app.workspace.getActiveViewOfType(MarkdownView)?.file]
 
-		for (const file of files) {
+		for (const [index, file] of files.entries()) {
 			if (signal.aborted) {
 				throw new Error('Aborted')
 			}
 
 			if (!file) {
-				new Notice(`⛔ ${this.manifest.name}: undefined file found`);
+				console.warn(`${this.manifest.name}: undefined file found`);
 			} else {
 				// Open file in vault in new tab for processing - if wholeVault
 				// is false, we should just stay in the existing file
-				const leaf = this.app.workspace.getLeaf();
+				const leaf = this.app.workspace.getLeaf(true);
 				await leaf.openFile(file);
 
 				await this.classifyFile(
@@ -292,6 +296,8 @@ export default class AutoClassifierPlugin extends Plugin {
 
 				// Close tab when done
 				this.closeLeaf(leaf);
+
+				console.debug(`Progress ${(index + 1) * 100 / files.length}%`);
 			}
 		}
 	}
